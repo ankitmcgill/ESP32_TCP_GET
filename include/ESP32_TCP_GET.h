@@ -27,7 +27,7 @@
 #define ESP32_TCP_GET_TAG		            "ESP32:TCP_GET"
 
 #define ESP32_TCP_GET_RETRY_COUNT           (3)
-#define ESP32_TCP_GET_REPLY_TIMEOUT_MS      (5000)
+#define ESP32_TCP_GET_REPLY_TIMEOUT_SEC     (5)
 
 #define ESP8266_TCP_GET_GET_REQUEST_STRING "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n"
 
@@ -38,6 +38,8 @@ void ESP32_TCP_GET_Initialize(ip_addr_t* dns1,
 
 bool ESP32_TCP_GET_RunGetRequest(char* hostname,
                                     char* path,
-                                    char* port);
+                                    char* port,
+									char* response,
+									uint16_t response_len);
 
 #endif

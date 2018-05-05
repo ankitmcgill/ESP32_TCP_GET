@@ -77,15 +77,25 @@ void ESP32_TCP_GET_Initialize(ip_addr_t* dns1,
 
 bool ESP32_TCP_GET_RunGetRequest(char* hostname,
                                     char* path,
-                                    char* port)
+                                    char* port,
+									char* response,
+									uint16_t response_len)
 {
 	//GENERATE GET STRING AND INITIATE TCP GET REQUEST
+
+	if(response == NULL ||
+		hostname == NULL ||
+		path == NULL ||
+		port == NULL)
+	{
+		return false;
+	}
 
 	//GENRATE GET STRING
 	sprintf(s_esp32_tcp_get_buffer_request,
 			ESP8266_TCP_GET_GET_REQUEST_STRING,
-			hostname,
-			path);
+			path,
+			hostname);
 	
 	if(s_debug)
 	{
@@ -100,6 +110,8 @@ bool ESP32_TCP_GET_RunGetRequest(char* hostname,
 						};
 
 	esp_err_t err;
+	int32_t sock_id;
+	int32_t r;
 	err = getaddrinfo(hostname, port, &hints, &resolved);
 
 	if(err != ESP_OK || resolved == NULL)
@@ -112,6 +124,50 @@ bool ESP32_TCP_GET_RunGetRequest(char* hostname,
 	address = &((struct sockaddr_in*)resolved->ai_addr)->sin_addr;
 	ets_printf(ESP32_TCP_GET_TAG" : DNS resolved = %s\n", inet_ntoa(*address));
 
+	//OPEN SOCKET AND START TCP WORK
+	sock_id = socket(resolved->ai_family, resolved->ai_socktype, 0);
+	if(sock_id < 0)
+	{
+		freeaddrinfo(resolved);
+		ets_printf(ESP32_TCP_GET_TAG" : socket failure. stopping !!!\n");
+		return false;
+	}
+
+	if(connect(sock_id, resolved->ai_addr, resolved->ai_addrlen) != 0)
+	{
+		close(sock_id);
+		freeaddrinfo(resolved);
+		ets_printf(ESP32_TCP_GET_TAG" : socket failed to connect !!!\n");
+		return false;
+	}
+
+	//SOCKET CONNECTED TO HOST
+	freeaddrinfo(resolved);
+
+	//WRITE GET REQUEST
+	if(write(sock_id, s_esp32_tcp_get_buffer_request, strlen(s_esp32_tcp_get_buffer_request)) < 0)
+	{
+		close(sock_id);
+		ets_printf(ESP32_TCP_GET_TAG" : socket send failed !!!\n");
+		return false;
+	}
+
+	//WAIT FOR REPLY
+	struct timeval recv_timeout;
+	recv_timeout.tv_sec = ESP32_TCP_GET_REPLY_TIMEOUT_SEC;
+	recv_timeout.tv_usec = 0;
+	
+	if(setsockopt(sock_id, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(recv_timeout)) < 0)
+	{
+		close(sock_id);
+		ets_printf(ESP32_TCP_GET_TAG" : socket timeout set error !!!\n");
+		return false;
+	}
+
+	//READ RESPONSE
+	r = read(sock_id, response, response_len);
+	
+	close(sock_id);
 	return true;
 }
 
